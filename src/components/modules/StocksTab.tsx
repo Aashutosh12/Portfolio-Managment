@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { usePortfolio } from '../../context/PortfolioContext';
 import type { StockAsset } from '../../types';
 import { formatCurrency, formatPercent } from '../../utils/formatters';
 import { STOCK_SUGGESTIONS } from '../../utils/assetSuggestions';
+import { NSE_STOCKS } from '../../utils/nseStocks';
 import { 
   Search, 
   Plus, 
@@ -47,15 +48,37 @@ export const StocksTab: React.FC = () => {
   const [showStockSuggestions, setShowStockSuggestions] = useState(false);
   const [showTickerSuggestions, setShowTickerSuggestions] = useState(false);
 
+  // Combine popular stock suggestions and all NSE stocks (filtering out duplicate tickers)
+  const combinedSuggestions = useMemo(() => {
+    const seen = new Set<string>();
+    const list: typeof STOCK_SUGGESTIONS = [];
+    
+    // Add popular suggestions first
+    STOCK_SUGGESTIONS.forEach(s => {
+      seen.add(s.ticker.toUpperCase());
+      list.push(s);
+    });
+    
+    // Add all NSE stocks
+    NSE_STOCKS.forEach(s => {
+      if (!seen.has(s.ticker.toUpperCase())) {
+        seen.add(s.ticker.toUpperCase());
+        list.push(s);
+      }
+    });
+    
+    return list;
+  }, []);
+
   const stockSuggestions = company.trim()
-    ? STOCK_SUGGESTIONS.filter(s =>
+    ? combinedSuggestions.filter(s =>
         s.name.toLowerCase().includes(company.toLowerCase()) ||
         s.ticker.toLowerCase().includes(company.toLowerCase())
       ).slice(0, 5)
     : [];
 
   const tickerSuggestions = ticker.trim()
-    ? STOCK_SUGGESTIONS.filter(s =>
+    ? combinedSuggestions.filter(s =>
         s.ticker.toLowerCase().includes(ticker.toLowerCase()) ||
         s.name.toLowerCase().includes(ticker.toLowerCase())
       ).slice(0, 5)
