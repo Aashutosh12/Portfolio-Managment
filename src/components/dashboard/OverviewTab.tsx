@@ -60,6 +60,13 @@ export const OverviewTab: React.FC = () => {
   const totalCryptoCurrent = data.crypto.reduce((sum, c) => sum + (c.quantity * c.currentPrice), 0) * cryptoRate;
   const cryptoPL = totalCryptoCurrent - totalCryptoInvested;
 
+  // 2b. Mutual Funds
+  const mfRate = currency === 'USD' ? (1 / usdToInr) : 1;
+  const mutualFundsList = data.mutualFunds || [];
+  const totalMfInvested = mutualFundsList.reduce((sum, f) => sum + (f.units * f.averageNav), 0) * mfRate;
+  const totalMfCurrent = mutualFundsList.reduce((sum, f) => sum + (f.units * f.currentNav), 0) * mfRate;
+  const mfPL = totalMfCurrent - totalMfInvested;
+
   // 3. Banking Assets
   const cashAccounts = data.banking.filter(b => b.accountType === 'Savings' || b.accountType === 'Current');
   const fdAccounts = data.banking.filter(b => b.accountType === 'Fixed Deposit' || b.accountType === 'Recurring Deposit');
@@ -80,11 +87,11 @@ export const OverviewTab: React.FC = () => {
   }, 0) * loanRate;
 
   // 5. Aggregate Wealth Metrics
-  const totalAssets = totalStocksCurrent + totalCryptoCurrent + totalBankingBalance;
+  const totalAssets = totalStocksCurrent + totalCryptoCurrent + totalMfCurrent + totalBankingBalance;
   const netWorth = totalAssets - totalLiabilities;
   
-  const totalInvested = totalStocksInvested + totalCryptoInvested + fixedIncomeBalance;
-  const totalProfitLoss = stockPL + cryptoPL;
+  const totalInvested = totalStocksInvested + totalCryptoInvested + totalMfInvested + fixedIncomeBalance;
+  const totalProfitLoss = stockPL + cryptoPL + mfPL;
   const absoluteReturn = totalInvested > 0 ? (totalProfitLoss / totalInvested) : 0;
 
   // 6. Passive Income Metrics
@@ -121,9 +128,126 @@ export const OverviewTab: React.FC = () => {
     }
   });
 
+  const mfList = data.mutualFunds || [];
+  mfList.forEach(f => {
+    const cost = f.units * f.averageNav;
+    if (cost > 0) {
+      allPerformanceAssets.push({
+        name: f.fundName,
+        gainPct: (f.currentNav - f.averageNav) / f.averageNav,
+        type: 'Stock'
+      });
+    }
+  });
+
   const sortedPerformance = [...allPerformanceAssets].sort((a, b) => b.gainPct - a.gainPct);
   const topAsset = sortedPerformance[0];
   const worstAsset = sortedPerformance[sortedPerformance.length - 1];
+
+  // 9. Dynamic Today's Gain Calculations
+  const stockTodayGain = data.stocks.reduce((sum, s) => {
+    const prevClose = s.previousClose || s.currentPrice;
+    return sum + ((s.currentPrice - prevClose) * s.quantity);
+  }, 0) * stockRate;
+
+  const cryptoTodayGain = data.crypto.reduce((sum, c) => {
+    const prevClose = c.previousClose || c.currentPrice;
+    return sum + ((c.currentPrice - prevClose) * c.quantity);
+  }, 0) * cryptoRate;
+
+  const mfTodayGain = mfList.reduce((sum, f) => {
+    const prevClose = f.previousCloseNav || f.currentNav;
+    return sum + ((f.currentNav - prevClose) * f.units);
+  }, 0) * mfRate;
+
+  const totalTodayGain = stockTodayGain + cryptoTodayGain + mfTodayGain;
+  const totalFluctuatingAssetsCurrent = totalStocksCurrent + totalCryptoCurrent + totalMfCurrent;
+  const yesterdayFluctuatingValue = totalFluctuatingAssetsCurrent - totalTodayGain;
+  const todayGainPercent = yesterdayFluctuatingValue > 0 ? (totalTodayGain / yesterdayFluctuatingValue) : 0;
+
+  // 10. Dynamic Equities CAGR calculation
+  let equitiesCagr = 0;
+  if (totalStocksInvested > 0 && data.stocks.length > 0) {
+    let totalWeightedYears = 0;
+    let totalWeight = 0;
+    const now = new Date();
+    
+    data.stocks.forEach(s => {
+      const purchaseDate = new Date(s.purchaseDate);
+      if (!isNaN(purchaseDate.getTime())) {
+        const diffTime = Math.abs(now.getTime() - purchaseDate.getTime());
+        const diffYears = diffTime / (1000 * 60 * 60 * 24 * 365.25) || 0.1;
+        const weight = s.quantity * s.purchasePrice;
+        totalWeightedYears += diffYears * weight;
+        totalWeight += weight;
+      }
+    });
+    
+    const avgHoldingYears = totalWeight > 0 ? (totalWeightedYears / totalWeight) : 1;
+    const totalRatio = totalStocksCurrent / totalStocksInvested;
+    if (totalRatio > 0) {
+      equitiesCagr = Math.pow(totalRatio, 1 / Math.max(1, avgHoldingYears)) - 1;
+    }
+  }
+
+  // 11. Dynamic Wealth Index Score calculation
+  let debtScore = 30;
+  if (totalAssets > 0) {
+    const debtRatio = totalLiabilities / totalAssets;
+    debtScore = Math.max(0, Math.min(30, 30 * (1 - debtRatio)));
+  }
+
+  const salaryRecords = data.salary;
+  let avgMonthlyExpense = 50000 * bankingRate; // default fallback
+  if (salaryRecords && salaryRecords.length > 0) {
+    const totalExp = salaryRecords.reduce((sum, s) => sum + (s.totalExpenses || 0), 0);
+    avgMonthlyExpense = totalExp / salaryRecords.length || 50000 * bankingRate;
+  }
+  const emergencyCoverageMonths = avgMonthlyExpense > 0 ? (emergencyFundValue / avgMonthlyExpense) : 6;
+  const emergencyScore = Math.min(30, Math.round(emergencyCoverageMonths * 5)) || 15;
+
+  // Dynamic Savings Rate calculation
+  let savingsRate = 0; // fallback to 0%
+  if (data.salary.length > 0) {
+    let totalIncome = 0;
+    let totalSavings = 0;
+    data.salary.forEach(s => {
+      const monthIncome = s.receivedSalary + s.bonuses;
+      if (monthIncome > 0) {
+        totalIncome += monthIncome;
+        const monthExpenses = s.totalExpenses || 0;
+        totalSavings += Math.max(0, monthIncome - monthExpenses);
+      }
+    });
+    if (totalIncome > 0) {
+      savingsRate = totalSavings / totalIncome;
+    }
+  }
+
+  let activeAssetClasses = 0;
+  if (totalAssets > 0) {
+    if (totalStocksCurrent / totalAssets > 0.05) activeAssetClasses++;
+    if (totalCryptoCurrent / totalAssets > 0.05) activeAssetClasses++;
+    if (totalMfCurrent / totalAssets > 0.05) activeAssetClasses++;
+    if (cashBalance / totalAssets > 0.05) activeAssetClasses++;
+    if (fixedIncomeBalance / totalAssets > 0.05) activeAssetClasses++;
+  }
+  const diversificationScore = Math.max(10, activeAssetClasses * 10);
+  
+  const wealthIndexScore = totalAssets === 0 ? 50 : Math.min(100, Math.max(10, Math.round(debtScore + emergencyScore + diversificationScore)));
+  
+  let wealthScoreRating = 'AVERAGE';
+  let wealthScoreDescription = '';
+  if (wealthIndexScore >= 85) {
+    wealthScoreRating = 'EXCELLENT';
+    wealthScoreDescription = `High emergency buffer and low liabilities drive your top index score. Diversification score is ${diversificationScore}/40.`;
+  } else if (wealthIndexScore >= 70) {
+    wealthScoreRating = 'GOOD';
+    wealthScoreDescription = `Good overall health. Improving asset diversification or lowering liabilities can raise your rating. Diversification score is ${diversificationScore}/40.`;
+  } else {
+    wealthScoreRating = 'NEEDS ATTENTION';
+    wealthScoreDescription = `Needs optimization. Build emergency funds and pay down high-interest liabilities to secure your rating. Diversification score is ${diversificationScore}/40.`;
+  }
 
   // --- CHART DATA GENERATION ---
 
@@ -142,6 +266,7 @@ export const OverviewTab: React.FC = () => {
   const COLORS = ['#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ec4899'];
   const allocationData = [
     { name: 'Equities (Stocks)', value: totalStocksCurrent },
+    { name: 'Mutual Funds', value: totalMfCurrent },
     { name: 'Crypto', value: totalCryptoCurrent },
     { name: 'Savings / Cash', value: cashBalance },
     { name: 'Fixed Income (FD/RD)', value: fixedIncomeBalance },
@@ -150,6 +275,7 @@ export const OverviewTab: React.FC = () => {
   // C. Growth comparison
   const performanceChartData = [
     { name: 'Stocks', Invested: totalStocksInvested, Current: totalStocksCurrent },
+    { name: 'Mutual Funds', Invested: totalMfInvested, Current: totalMfCurrent },
     { name: 'Crypto', Invested: totalCryptoInvested, Current: totalCryptoCurrent },
     { name: 'Banking/FDs', Invested: fixedIncomeBalance, Current: fixedIncomeBalance + expectedFDInterest },
   ];
@@ -186,7 +312,7 @@ export const OverviewTab: React.FC = () => {
           </div>
           <div>
             <h2 className="text-sm font-semibold text-white">Live Asset Valuation Enabled</h2>
-            <p className="text-xs text-slate-400">Stocks (Fluctuating Sim) • Cryptocurrencies (Binance API Live feed)</p>
+            <p className="text-xs text-slate-400">Stocks (Yahoo Finance Live) • Cryptocurrencies (Coinbase API Live) • Mutual Funds (AMFI API Live)</p>
           </div>
         </div>
         <div className="text-xs text-slate-400 font-mono self-end sm:self-center">
@@ -217,9 +343,13 @@ export const OverviewTab: React.FC = () => {
             </div>
             
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-2">
-              <div className="flex items-center text-emerald-400 text-xs font-semibold bg-emerald-950/45 px-2.5 py-1 rounded-lg border border-emerald-500/20">
-                <TrendingUp className="w-3.5 h-3.5 mr-1" />
-                +₹4,890 (Today +0.05%)
+              <div className={`flex items-center text-xs font-semibold px-2.5 py-1 rounded-lg border ${
+                totalTodayGain >= 0 
+                  ? 'text-emerald-400 bg-emerald-950/45 border-emerald-500/20' 
+                  : 'text-red-400 bg-red-950/45 border-red-500/20'
+              }`}>
+                <TrendingUp className={`w-3.5 h-3.5 mr-1 ${totalTodayGain < 0 ? 'rotate-180 text-red-400' : 'text-emerald-400'}`} />
+                {totalTodayGain >= 0 ? '+' : ''}{formatCurrency(totalTodayGain, currency)} (Today {formatPercent(todayGainPercent)})
               </div>
               <div className="text-slate-400 text-xs">
                 Invested: <span className="font-semibold text-slate-200">{formatCurrency(totalInvested, currency)}</span>
@@ -241,7 +371,7 @@ export const OverviewTab: React.FC = () => {
             </div>
             <div>
               <p className="text-[10px] text-slate-400 uppercase font-medium">Monthly Savings</p>
-              <p className="text-sm font-bold text-emerald-400 mt-0.5">34.8%</p>
+              <p className="text-sm font-bold text-emerald-400 mt-0.5">{(savingsRate * 100).toFixed(1)}%</p>
             </div>
           </div>
         </div>
@@ -252,8 +382,14 @@ export const OverviewTab: React.FC = () => {
             <span className="text-xs text-slate-400 uppercase font-semibold tracking-wider flex items-center gap-1.5">
               <Award className="w-4 h-4 text-amber-500" /> Wealth Index Rating
             </span>
-            <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded-lg border border-emerald-500/20">
-              EXCELLENT
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-lg border ${
+              wealthIndexScore >= 85
+                ? 'text-emerald-400 bg-emerald-950/40 border-emerald-500/20'
+                : wealthIndexScore >= 70
+                ? 'text-indigo-400 bg-indigo-950/40 border-indigo-500/20'
+                : 'text-amber-400 bg-amber-950/40 border-amber-500/20'
+            }`}>
+              {wealthScoreRating}
             </span>
           </div>
 
@@ -269,17 +405,17 @@ export const OverviewTab: React.FC = () => {
                   className="stroke-violet-500 fill-none" 
                   strokeWidth="6" 
                   strokeDasharray="213.6" 
-                  strokeDashoffset={213.6 - (213.6 * 84) / 100} // score is 84
+                  strokeDashoffset={213.6 - (213.6 * wealthIndexScore) / 100}
                   strokeLinecap="round"
                 />
               </svg>
-              <span className="absolute text-xl font-black text-white">84</span>
+              <span className="absolute text-xl font-black text-white">{wealthIndexScore}</span>
             </div>
             
             <div className="space-y-1">
               <h4 className="text-sm font-bold text-slate-200">Financial Health Score</h4>
               <p className="text-[11px] text-slate-400 leading-tight">
-                High emergency buffer and low liabilities drive your top index score. Diversification score is 78/100.
+                {wealthScoreDescription}
               </p>
             </div>
           </div>
@@ -287,7 +423,9 @@ export const OverviewTab: React.FC = () => {
           <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-800/60 text-xs">
             <div className="p-2 bg-slate-900/50 rounded-xl">
               <p className="text-slate-400 text-[10px] uppercase">CAGR (Equities)</p>
-              <p className="font-semibold text-emerald-400 mt-0.5">+14.2%</p>
+              <p className={`font-semibold mt-0.5 ${equitiesCagr >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                {formatPercent(equitiesCagr)}
+              </p>
             </div>
             <div className="p-2 bg-slate-900/50 rounded-xl">
               <p className="text-slate-400 text-[10px] uppercase">Passive Income</p>

@@ -19,6 +19,7 @@ const DEFAULT_MOCK_DATA: PortfolioData = {
   },
   stocks: [],
   crypto: [],
+  mutualFunds: [],
   banking: [],
   salary: [],
   goals: [],
@@ -143,6 +144,9 @@ export function loadPortfolioData(password?: string): PortfolioData {
     // Attempt decryption
     try {
       const decrypted = decryptData(rawContent, password);
+      if (decrypted && !decrypted.mutualFunds) {
+        decrypted.mutualFunds = [];
+      }
       return decrypted;
     } catch (e) {
       throw new Error('Incorrect master password or corrupted database.');
@@ -150,7 +154,11 @@ export function loadPortfolioData(password?: string): PortfolioData {
   } else {
     // Attempt plain parse
     try {
-      return JSON.parse(rawContent);
+      const parsed = JSON.parse(rawContent);
+      if (parsed && !parsed.mutualFunds) {
+        parsed.mutualFunds = [];
+      }
+      return parsed;
     } catch (e) {
       // Maybe it was encrypted but auth key was deleted
       console.error('Data parsing failed. Check if database is encrypted.', e);

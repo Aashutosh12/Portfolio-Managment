@@ -9,7 +9,7 @@ import type { CompoundingFrequency } from '../types';
  */
 export function calculateCAGR(beginningValue: number, endingValue: number, years: number): number {
   if (beginningValue <= 0 || endingValue <= 0 || years <= 0) return 0;
-  return Math.pow(endingValue / beginningValue, 1 / years) - 1;
+  return Math.pow(endingValue / beginningValue, 1 / Math.max(1, years)) - 1;
 }
 
 /**

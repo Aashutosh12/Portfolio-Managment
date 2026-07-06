@@ -3,6 +3,7 @@ import { PortfolioProvider, usePortfolio } from './context/PortfolioContext';
 import { OverviewTab } from './components/dashboard/OverviewTab';
 import { StocksTab } from './components/modules/StocksTab';
 import { CryptoTab } from './components/modules/CryptoTab';
+import { MutualFundsTab } from './components/modules/MutualFundsTab';
 import { BankingTab } from './components/modules/BankingTab';
 import { SalaryTab } from './components/modules/SalaryTab';
 import { GoalsTab } from './components/modules/GoalsTab';
@@ -18,6 +19,7 @@ import {
   TrendingUp, 
   Coins, 
   Landmark, 
+  Layers,
   Briefcase, 
   Target, 
   LineChart, 
@@ -62,6 +64,7 @@ const AppContent: React.FC = () => {
       case 'overview': return <OverviewTab />;
       case 'stocks': return <StocksTab />;
       case 'crypto': return <CryptoTab />;
+      case 'mutualfunds': return <MutualFundsTab />;
       case 'banking': return <BankingTab />;
       case 'salary': return <SalaryTab />;
       case 'goals': return <GoalsTab />;
@@ -78,6 +81,7 @@ const AppContent: React.FC = () => {
     { id: 'overview', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
     { id: 'stocks', label: 'Equities (Stocks)', icon: <TrendingUp className="w-4 h-4" /> },
     { id: 'crypto', label: 'Cryptocurrency', icon: <Coins className="w-4 h-4" /> },
+    { id: 'mutualfunds', label: 'Mutual Funds', icon: <Layers className="w-4 h-4" /> },
     { id: 'banking', label: 'Banking & FDs', icon: <Landmark className="w-4 h-4" /> },
     { id: 'salary', label: 'Income & Budget', icon: <Briefcase className="w-4 h-4" /> },
     { id: 'goals', label: 'Milestones & Goals', icon: <Target className="w-4 h-4" /> },

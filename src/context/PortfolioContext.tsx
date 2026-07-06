@@ -3,6 +3,7 @@ import type {
   PortfolioData, 
   StockAsset, 
   CryptoAsset, 
+  MutualFundAsset,
   BankAsset, 
   SalaryRecord, 
   FinancialGoal, 
@@ -53,6 +54,11 @@ interface PortfolioContextType {
   addCrypto: (crypto: Omit<CryptoAsset, 'id'>) => void;
   editCrypto: (id: string, crypto: Partial<CryptoAsset>) => void;
   deleteCrypto: (id: string) => void;
+  
+  // Mutual Fund Methods
+  addMutualFund: (fund: Omit<MutualFundAsset, 'id'>) => void;
+  editMutualFund: (id: string, fund: Partial<MutualFundAsset>) => void;
+  deleteMutualFund: (id: string) => void;
   
   // Banking Methods
   addBank: (bank: Omit<BankAsset, 'id'>) => void;
@@ -225,15 +231,19 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Enable AES-256 Encryption
   const enableEncryption = (password: string) => {
-    setMasterPassword(password, data);
+    let currentData = data;
+    if (!currentData) {
+      currentData = loadPortfolioData();
+    }
+    setMasterPassword(password, currentData);
     setActivePassword(password);
     setLocked(false);
     
     // Update local settings state
     const updated = {
-      ...data,
+      ...currentData,
       settings: {
-        ...data.settings,
+        ...currentData.settings,
         isEncrypted: true,
         hasMasterPassword: true
       }
@@ -269,15 +279,40 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     saveState(updated);
   };
 
-  // Refresh Stock & Crypto Prices
+  // Refresh Stock & Crypto & Mutual Fund Prices
   const refreshLivePrices = async () => {
     try {
       const initialStocks = dataRef.current?.stocks;
       const initialCryptos = dataRef.current?.crypto;
-      const [liveCryptos, liveStocks, liveUsdInr] = await Promise.all([
+      const initialMutualFunds = dataRef.current?.mutualFunds || [];
+
+      const mfPromises = initialMutualFunds.map(async (fund) => {
+        if (!fund.schemeCode) return fund;
+        try {
+          const res = await fetch(`https://api.mfapi.in/mf/${fund.schemeCode}`);
+          if (res.ok) {
+            const json = await res.json();
+            const latestNav = parseFloat(json?.data?.[0]?.nav);
+            const prevNav = parseFloat(json?.data?.[1]?.nav) || latestNav;
+            if (!isNaN(latestNav) && latestNav > 0) {
+              return {
+                ...fund,
+                currentNav: latestNav,
+                previousCloseNav: prevNav
+              };
+            }
+          }
+        } catch (e) {
+          console.warn(`Failed to fetch NAV for scheme ${fund.schemeCode}`, e);
+        }
+        return fund;
+      });
+
+      const [liveCryptos, liveStocks, liveUsdInr, updatedMutualFunds] = await Promise.all([
         fetchLiveCryptoPrices(initialCryptos),
         fetchLiveStockPrices(initialStocks),
-        fetchUsdInrRate()
+        fetchUsdInrRate(),
+        Promise.all(mfPromises)
       ]);
 
       setUsdToInr(liveUsdInr);
@@ -291,13 +326,12 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const updated = {
         ...currentData,
         stocks: updatedStocks,
-        crypto: updatedCryptos
+        crypto: updatedCryptos,
+        mutualFunds: updatedMutualFunds
       };
       
       setData(updated);
       setLastPriceRefresh(new Date());
-      // We don't necessarily need to trigger disk write on every minor fluctuation tick
-      // unless user leaves or modifies assets, but let's save to keep it updated.
       savePortfolioData(updated, activePasswordRef.current);
     } catch (err) {
       console.warn('Could not complete background live price update', err);
@@ -396,6 +430,37 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const updated = {
       ...data,
       crypto: data.crypto.filter(c => c.id !== id),
+      notifications: [newNotif, ...data.notifications]
+    };
+    saveState(updated);
+  };
+  
+  // Mutual Funds
+  const addMutualFund = (fund: Omit<MutualFundAsset, 'id'>) => {
+    const newFund: MutualFundAsset = { ...fund, id: `mf-${Date.now()}` };
+    const newNotif = createNotification(`Added mutual fund investment in ${fund.fundName}`, 'success');
+    const updated = { 
+      ...data, 
+      mutualFunds: [...data.mutualFunds, newFund],
+      notifications: [newNotif, ...data.notifications]
+    };
+    saveState(updated);
+  };
+
+  const editMutualFund = (id: string, updatedFund: Partial<MutualFundAsset>) => {
+    const updated = {
+      ...data,
+      mutualFunds: data.mutualFunds.map(f => f.id === id ? { ...f, ...updatedFund } : f)
+    };
+    saveState(updated);
+  };
+
+  const deleteMutualFund = (id: string) => {
+    const fund = data.mutualFunds.find(f => f.id === id);
+    const newNotif = createNotification(`Deleted mutual fund asset ${fund ? fund.fundName : ''}`, 'info');
+    const updated = {
+      ...data,
+      mutualFunds: data.mutualFunds.filter(f => f.id !== id),
       notifications: [newNotif, ...data.notifications]
     };
     saveState(updated);
@@ -757,6 +822,9 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         addCrypto,
         editCrypto,
         deleteCrypto,
+        addMutualFund,
+        editMutualFund,
+        deleteMutualFund,
         addBank,
         editBank,
         deleteBank,

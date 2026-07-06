@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { usePortfolio } from '../../context/PortfolioContext';
 import type { CryptoAsset } from '../../types';
 import { formatCurrency, formatPercent } from '../../utils/formatters';
+import { CRYPTO_SUGGESTIONS } from '../../utils/assetSuggestions';
 import { 
   Search, 
   Plus, 
@@ -35,6 +36,14 @@ export const CryptoTab: React.FC = () => {
   const [quantity, setQuantity] = useState(0);
   const [averageCost, setAverageCost] = useState(0);
   const [notes, setNotes] = useState('');
+  const [showCryptoSuggestions, setShowCryptoSuggestions] = useState(false);
+
+  const cryptoSuggestions = coin.trim()
+    ? CRYPTO_SUGGESTIONS.filter(c =>
+        c.coin.toLowerCase().includes(coin.toLowerCase()) ||
+        c.name.toLowerCase().includes(coin.toLowerCase())
+      ).slice(0, 5)
+    : [];
 
   // Watchlist form
   const [watchlistSymbol, setWatchlistSymbol] = useState('');
@@ -410,16 +419,39 @@ export const CryptoTab: React.FC = () => {
 
             <form onSubmit={handleAddSubmit} className="space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
+                <div className="space-y-1 relative">
                   <label className="text-slate-400">Coin Ticker</label>
                   <input
                     type="text"
                     placeholder="e.g. BTC, ETH"
                     value={coin}
-                    onChange={(e) => setCoin(e.target.value)}
+                    onChange={(e) => {
+                      setCoin(e.target.value);
+                      setShowCryptoSuggestions(true);
+                    }}
+                    onFocus={() => setShowCryptoSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowCryptoSuggestions(false), 200)}
                     className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-white uppercase font-mono"
                     required
                   />
+                  {showCryptoSuggestions && cryptoSuggestions.length > 0 && (
+                    <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-slate-950 border border-slate-800 rounded-lg shadow-xl overflow-hidden max-h-48 overflow-y-auto">
+                      {cryptoSuggestions.map((suggestion, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            setCoin(suggestion.coin);
+                            setShowCryptoSuggestions(false);
+                          }}
+                          className="w-full text-left px-3 py-2 hover:bg-slate-900 text-xs flex justify-between items-center transition-colors border-b border-slate-900/40 last:border-0"
+                        >
+                          <span className="font-bold text-white">{suggestion.name}</span>
+                          <span className="font-mono bg-slate-800 text-violet-300 px-1.5 py-0.5 rounded text-[10px] font-semibold">{suggestion.coin}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <label className="text-slate-400">Exchange Purchased</label>

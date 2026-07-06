@@ -148,7 +148,12 @@ export const LockScreen: React.FC = () => {
             
             <button
               type="button"
-              onClick={() => setIsSettingUp(false)}
+              onClick={() => {
+                setPassword('');
+                setConfirmPassword('');
+                setError('');
+                setIsSettingUp(false);
+              }}
               className="w-full text-slate-400 hover:text-slate-300 transition-colors text-xs text-center block pt-2 underline"
             >
               Go back
@@ -169,7 +174,12 @@ export const LockScreen: React.FC = () => {
             </div>
 
             <button
-              onClick={() => setIsSettingUp(true)}
+              onClick={() => {
+                setPassword('');
+                setConfirmPassword('');
+                setError('');
+                setIsSettingUp(true);
+              }}
               className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-medium py-3 rounded-xl transition-all text-sm flex items-center justify-center gap-2 shadow-lg shadow-violet-600/25 active:scale-[0.98]"
             >
               <Shield className="w-4 h-4" /> Setup Master Password (AES-256)

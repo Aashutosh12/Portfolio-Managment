@@ -23,6 +23,7 @@ export interface StockAsset {
   dividend: number; // total dividends received or yield %
   sector: string;
   notes?: string;
+  previousClose?: number;
 }
 
 export interface CryptoAsset {
@@ -35,6 +36,7 @@ export interface CryptoAsset {
   averageCost: number;
   currentPrice: number;
   notes?: string;
+  previousClose?: number;
 }
 
 export type BankAccountType = 'Savings' | 'Current' | 'Fixed Deposit' | 'Recurring Deposit';
@@ -158,10 +160,25 @@ export interface AppNotification {
   read: boolean;
 }
 
+export interface MutualFundAsset {
+  id: string;
+  fundName: string;
+  schemeCode: string; // AMFI scheme code for live price tracking
+  folioNumber?: string;
+  category: string; // Equity, Debt, Hybrid, Index, etc.
+  purchaseDate: string;
+  units: number;
+  averageNav: number; // Purchase price per unit
+  currentNav: number;
+  notes?: string;
+  previousCloseNav?: number;
+}
+
 export interface PortfolioData {
   settings: AppSettings;
   stocks: StockAsset[];
   crypto: CryptoAsset[];
+  mutualFunds: MutualFundAsset[];
   banking: BankAsset[];
   salary: SalaryRecord[];
   goals: FinancialGoal[];

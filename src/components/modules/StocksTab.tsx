@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { usePortfolio } from '../../context/PortfolioContext';
 import type { StockAsset } from '../../types';
 import { formatCurrency, formatPercent } from '../../utils/formatters';
+import { STOCK_SUGGESTIONS } from '../../utils/assetSuggestions';
 import { 
   Search, 
   Plus, 
@@ -41,6 +42,24 @@ export const StocksTab: React.FC = () => {
   const [dividend, setDividend] = useState(0);
   const [sector, setSector] = useState('');
   const [notes, setNotes] = useState('');
+  
+  // Autocomplete Suggestions States
+  const [showStockSuggestions, setShowStockSuggestions] = useState(false);
+  const [showTickerSuggestions, setShowTickerSuggestions] = useState(false);
+
+  const stockSuggestions = company.trim()
+    ? STOCK_SUGGESTIONS.filter(s =>
+        s.name.toLowerCase().includes(company.toLowerCase()) ||
+        s.ticker.toLowerCase().includes(company.toLowerCase())
+      ).slice(0, 5)
+    : [];
+
+  const tickerSuggestions = ticker.trim()
+    ? STOCK_SUGGESTIONS.filter(s =>
+        s.ticker.toLowerCase().includes(ticker.toLowerCase()) ||
+        s.name.toLowerCase().includes(ticker.toLowerCase())
+      ).slice(0, 5)
+    : [];
 
   // CSV Import State
   const [csvText, setCsvText] = useState('');
@@ -538,27 +557,91 @@ export const StocksTab: React.FC = () => {
             </div>
 
             <form onSubmit={handleAddSubmit} className="grid grid-cols-2 gap-4 text-xs">
-              <div className="col-span-2 space-y-1">
+              <div className="col-span-2 space-y-1 relative">
                 <label className="text-slate-400">Company Name</label>
                 <input
                   type="text"
                   placeholder="e.g. Infosys Ltd."
                   value={company}
-                  onChange={(e) => setCompany(e.target.value)}
+                  onChange={(e) => {
+                    setCompany(e.target.value);
+                    setShowStockSuggestions(true);
+                  }}
+                  onFocus={() => setShowStockSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowStockSuggestions(false), 200)}
                   className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-white"
                   required
                 />
+                {showStockSuggestions && stockSuggestions.length > 0 && (
+                  <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-slate-950 border border-slate-800 rounded-lg shadow-xl overflow-hidden max-h-48 overflow-y-auto">
+                    {stockSuggestions.map((suggestion, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          setCompany(suggestion.name);
+                          setTicker(suggestion.ticker);
+                          setSector(suggestion.sector);
+                          setExchange(suggestion.exchange);
+                          setShowStockSuggestions(false);
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-slate-900 text-xs flex justify-between items-center transition-colors border-b border-slate-900/40 last:border-0"
+                      >
+                        <div>
+                          <span className="font-bold text-white block">{suggestion.name}</span>
+                          <span className="text-[10px] text-slate-400">{suggestion.sector}</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-mono bg-slate-800 text-violet-300 px-1.5 py-0.5 rounded text-[10px] font-semibold">{suggestion.ticker}</span>
+                          <span className="block text-[9px] text-slate-500 font-bold uppercase mt-0.5">{suggestion.exchange}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 relative">
                 <label className="text-slate-400">Ticker Symbol</label>
                 <input
                   type="text"
                   placeholder="e.g. INFY.NS or INFY"
                   value={ticker}
-                  onChange={(e) => setTicker(e.target.value)}
+                  onChange={(e) => {
+                    setTicker(e.target.value);
+                    setShowTickerSuggestions(true);
+                  }}
+                  onFocus={() => setShowTickerSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowTickerSuggestions(false), 200)}
                   className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-white uppercase font-mono"
                   required
                 />
+                {showTickerSuggestions && tickerSuggestions.length > 0 && (
+                  <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-slate-950 border border-slate-800 rounded-lg shadow-xl overflow-hidden max-h-48 overflow-y-auto w-64">
+                    {tickerSuggestions.map((suggestion, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          setCompany(suggestion.name);
+                          setTicker(suggestion.ticker);
+                          setSector(suggestion.sector);
+                          setExchange(suggestion.exchange);
+                          setShowTickerSuggestions(false);
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-slate-900 text-xs flex justify-between items-center transition-colors border-b border-slate-900/40 last:border-0"
+                      >
+                        <div>
+                          <span className="font-bold text-white block truncate w-32">{suggestion.name}</span>
+                          <span className="text-[10px] text-slate-450 block truncate w-32">{suggestion.sector}</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-mono bg-slate-800 text-violet-300 px-1.5 py-0.5 rounded text-[10px] font-semibold">{suggestion.ticker}</span>
+                          <span className="block text-[9px] text-slate-500 font-bold uppercase mt-0.5">{suggestion.exchange}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="space-y-1">
                 <label className="text-slate-400">Sector</label>

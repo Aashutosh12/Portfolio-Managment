@@ -1,32 +1,43 @@
 import type { StockAsset, CryptoAsset } from '../types';
 
+// Deterministic daily change percentage based on ticker name and date
+export function getSimulatedDailyChange(key: string): number {
+  let hash = 0;
+  const str = key + new Date().toDateString();
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  // Yields a stable daily percentage between -2.5% and +2.5%
+  const pct = (Math.abs(hash) % 50 - 25) / 1000;
+  return pct || 0.002; // default +0.2%
+}
+
 // Cache for last fetched prices
-let cryptoPriceCache: Record<string, number> = {
-  BTC: 68500,
-  ETH: 3540,
-  SOL: 145.80,
+let cryptoPriceCache: Record<string, { price: number; previousClose: number }> = {
+  BTC: { price: 68500, previousClose: 68500 / (1 + getSimulatedDailyChange('BTC')) },
+  ETH: { price: 3540, previousClose: 3540 / (1 + getSimulatedDailyChange('ETH')) },
+  SOL: { price: 145.80, previousClose: 145.80 / (1 + getSimulatedDailyChange('SOL')) },
 };
 
-let stockPriceCache: Record<string, number> = {
-  'RELIANCE.NS': 2890.75,
-  'TCS.NS': 4125.40,
-  'HDFCBANK.NS': 1720.50,
-  'AAPL': 218.30,
-  'TSLA': 248.50,
+let stockPriceCache: Record<string, { price: number; previousClose: number }> = {
+  'RELIANCE.NS': { price: 2890.75, previousClose: 2875.00 },
+  'TCS.NS': { price: 4125.40, previousClose: 4150.00 },
+  'HDFCBANK.NS': { price: 1720.50, previousClose: 1715.00 },
+  'AAPL': { price: 218.30, previousClose: 216.50 },
+  'TSLA': { price: 248.50, previousClose: 242.10 },
 };
 
 /**
- * Fetch live Crypto prices from Binance public API
- * Binance returns prices in USD (e.g. BTCUSDT)
+ * Fetch live Crypto prices from Coinbase public API
  */
-export async function fetchLiveCryptoPrices(activeCryptos?: CryptoAsset[]): Promise<Record<string, number>> {
+export async function fetchLiveCryptoPrices(activeCryptos?: CryptoAsset[]): Promise<Record<string, { price: number; previousClose: number }>> {
   try {
     const coinsSet = new Set<string>(['BTC', 'ETH', 'SOL']);
     if (activeCryptos) {
       activeCryptos.forEach(c => coinsSet.add(c.coin.toUpperCase()));
     }
     const coins = Array.from(coinsSet);
-    const prices: Record<string, number> = { ...cryptoPriceCache };
+    const prices: Record<string, { price: number; previousClose: number }> = { ...cryptoPriceCache };
     
     // We fetch in parallel from Coinbase USD spot prices (which has CORS support)
     const fetchPromises = coins.map(async (coin) => {
@@ -36,8 +47,11 @@ export async function fetchLiveCryptoPrices(activeCryptos?: CryptoAsset[]): Prom
           const json = await res.json();
           const price = parseFloat(json?.data?.amount);
           if (!isNaN(price) && price > 0) {
-            prices[coin] = price;
-            cryptoPriceCache[coin] = price; // update cache
+            const dailyChange = getSimulatedDailyChange(coin);
+            const prevClose = price / (1 + dailyChange);
+            const data = { price, previousClose: prevClose };
+            prices[coin] = data;
+            cryptoPriceCache[coin] = data; // update cache
           }
         }
       } catch (err) {
@@ -54,11 +68,8 @@ export async function fetchLiveCryptoPrices(activeCryptos?: CryptoAsset[]): Prom
 }
 
 /**
- * Fetch live Stock prices. Since Yahoo/Finnhub require API keys or CORS proxies,
- * we use a simulated volatility update that slightly shifts the prices to create
- * a premium, live-updating feel on the dashboard, plus try fetching if a proxy exists.
+ * Helper function to fetch with a timeout
  */
-// Helper function to fetch with a timeout (in milliseconds)
 const fetchWithTimeout = async (url: string, timeoutMs = 2500): Promise<Response> => {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -104,10 +115,9 @@ export async function fetchUsdInrRate(): Promise<number> {
   return usdToInrRate;
 }
 
-export async function fetchLiveStockPrices(activeStocks?: StockAsset[]): Promise<Record<string, number>> {
-  const prices: Record<string, number> = { ...stockPriceCache };
+export async function fetchLiveStockPrices(activeStocks?: StockAsset[]): Promise<Record<string, { price: number; previousClose: number }>> {
+  const prices: Record<string, { price: number; previousClose: number }> = { ...stockPriceCache };
   
-  // Get all unique tickers from active stocks plus defaults
   const tickersSet = new Set<string>(Object.keys(stockPriceCache));
   if (activeStocks) {
     activeStocks.forEach(s => tickersSet.add(s.ticker));
@@ -129,17 +139,24 @@ export async function fetchLiveStockPrices(activeStocks?: StockAsset[]): Promise
       }
     }
 
-    // Try corsproxy.io first (fast Cloudflare Workers proxy)
+    const processResult = (data: any): boolean => {
+      const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
+      const prevClose = data?.chart?.result?.[0]?.meta?.chartPreviousClose || data?.chart?.result?.[0]?.meta?.previousClose || price;
+      if (price && !isNaN(price) && price > 0) {
+        const item = { price, previousClose: prevClose || price / (1 + getSimulatedDailyChange(ticker)) };
+        prices[ticker] = item;
+        stockPriceCache[ticker] = item;
+        return true;
+      }
+      return false;
+    };
+
+    // Try corsproxy.io first
     try {
       const res = await fetchWithTimeout(`https://corsproxy.io/?${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${cleanTicker}`)}`, 2000);
       if (res.ok) {
         const data = await res.json();
-        const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
-        if (price && !isNaN(price) && price > 0) {
-          prices[ticker] = price;
-          stockPriceCache[ticker] = price; // update cache
-          priceFetched = true;
-        }
+        priceFetched = processResult(data);
       }
     } catch (err) {
       console.warn(`corsproxy.io failed for ${ticker}, trying allorigins`, err);
@@ -151,24 +168,21 @@ export async function fetchLiveStockPrices(activeStocks?: StockAsset[]): Promise
         const res = await fetchWithTimeout(`https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${cleanTicker}`)}`, 2000);
         if (res.ok) {
           const data = await res.json();
-          const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
-          if (price && !isNaN(price) && price > 0) {
-            prices[ticker] = price;
-            stockPriceCache[ticker] = price; // update cache
-            priceFetched = true;
-          }
+          priceFetched = processResult(data);
         }
       } catch (err) {
         console.warn(`allorigins failed for ${ticker}`, err);
       }
     }
 
-    // Stable fallback: keep existing price as-is to avoid wild random jumps
+    // Stable fallback
     if (!priceFetched) {
       const matchingStock = activeStocks?.find(s => s.ticker === ticker);
-      const existingPrice = matchingStock?.currentPrice || matchingStock?.purchasePrice || stockPriceCache[ticker] || 150.00;
-      prices[ticker] = existingPrice;
-      stockPriceCache[ticker] = existingPrice;
+      const existingPrice = matchingStock?.currentPrice || matchingStock?.purchasePrice || stockPriceCache[ticker]?.price || 150.00;
+      const existingPrevClose = matchingStock?.previousClose || stockPriceCache[ticker]?.previousClose || existingPrice / (1 + getSimulatedDailyChange(ticker));
+      const item = { price: existingPrice, previousClose: existingPrevClose };
+      prices[ticker] = item;
+      stockPriceCache[ticker] = item;
     }
   });
 
@@ -177,13 +191,11 @@ export async function fetchLiveStockPrices(activeStocks?: StockAsset[]): Promise
 }
 
 /**
- * Gets currency conversion rate (USD/EUR to INR)
- * Static standard conversions that can be updated or fetched
+ * Gets currency conversion rate
  */
 export function getConversionRate(from: string, to: string): number {
   if (from === to) return 1;
   
-  // Base is INR (1 USD = 83.5 INR, 1 EUR = 90.2 INR)
   const ratesToINR: Record<string, number> = {
     INR: 1,
     USD: 83.5,
@@ -199,13 +211,14 @@ export function getConversionRate(from: string, to: string): number {
 /**
  * Updates a list of stocks with their latest prices
  */
-export function updateStockPrices(stocks: StockAsset[], livePrices: Record<string, number>): StockAsset[] {
+export function updateStockPrices(stocks: StockAsset[], livePrices: Record<string, { price: number; previousClose: number }>): StockAsset[] {
   return stocks.map(stock => {
-    const livePrice = livePrices[stock.ticker];
-    if (livePrice) {
+    const liveData = livePrices[stock.ticker];
+    if (liveData) {
       return {
         ...stock,
-        currentPrice: livePrice,
+        currentPrice: liveData.price,
+        previousClose: liveData.previousClose,
       };
     }
     return stock;
@@ -215,13 +228,14 @@ export function updateStockPrices(stocks: StockAsset[], livePrices: Record<strin
 /**
  * Updates a list of cryptos with their latest prices
  */
-export function updateCryptoPrices(cryptos: CryptoAsset[], livePrices: Record<string, number>): CryptoAsset[] {
+export function updateCryptoPrices(cryptos: CryptoAsset[], livePrices: Record<string, { price: number; previousClose: number }>): CryptoAsset[] {
   return cryptos.map(crypto => {
-    const livePrice = livePrices[crypto.coin];
-    if (livePrice) {
+    const liveData = livePrices[crypto.coin];
+    if (liveData) {
       return {
         ...crypto,
-        currentPrice: livePrice,
+        currentPrice: liveData.price,
+        previousClose: liveData.previousClose,
       };
     }
     return crypto;
