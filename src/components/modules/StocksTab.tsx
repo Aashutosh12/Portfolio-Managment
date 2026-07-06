@@ -73,11 +73,36 @@ export const StocksTab: React.FC = () => {
     const timer = setTimeout(async () => {
       setIsSearchingYahoo(true);
       try {
-        const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(stockSearchQuery)}`;
-        const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
-        if (res.ok) {
-          const resultData = await res.json();
-          const quotes = resultData?.quotes || [];
+        const queryUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(stockSearchQuery)}`;
+        let responseData = null;
+        let success = false;
+
+        // Try corsproxy.io first
+        try {
+          const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(queryUrl)}`);
+          if (res.ok) {
+            responseData = await res.json();
+            success = true;
+          }
+        } catch (err) {
+          console.warn('corsproxy.io failed, trying allorigins', err);
+        }
+
+        // Fallback to allorigins if corsproxy fails
+        if (!success) {
+          try {
+            const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(queryUrl)}`);
+            if (res.ok) {
+              responseData = await res.json();
+              success = true;
+            }
+          } catch (err) {
+            console.warn('allorigins fallback failed', err);
+          }
+        }
+
+        if (success && responseData) {
+          const quotes = responseData?.quotes || [];
           const equities = quotes.filter((q: any) => q.quoteType === 'EQUITY' || q.quoteType === 'ETF');
           setYahooSuggestions(equities.slice(0, 8));
         }
