@@ -58,7 +58,7 @@ export const LockScreen: React.FC = () => {
             )}
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-white bg-gradient-to-r from-violet-400 to-indigo-300 bg-clip-text text-transparent">
-            Antigravity Vault
+            ArthSetu Vault
           </h1>
           <p className="text-slate-400 text-xs mt-1 text-center font-mono">
             {hasPasswordSet 

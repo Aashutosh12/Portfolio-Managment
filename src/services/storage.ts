@@ -1,8 +1,11 @@
 import type { PortfolioData } from '../types';
 import { encryptData, decryptData, hashPassword } from '../utils/crypto';
 
-export const STORAGE_KEY = 'antigravity_wealth_data';
-export const AUTH_KEY = 'antigravity_auth_hash';
+export const STORAGE_KEY = 'arthsetu_wealth_data';
+export const AUTH_KEY = 'arthsetu_auth_hash';
+
+const OLD_STORAGE_KEY = 'antigravity_wealth_data';
+const OLD_AUTH_KEY = 'antigravity_auth_hash';
 
 // Detailed premium mock data to instantly populate the dashboard and wow the user
 const DEFAULT_MOCK_DATA: PortfolioData = {
@@ -28,7 +31,7 @@ const DEFAULT_MOCK_DATA: PortfolioData = {
   notifications: [
     {
       id: 'nf-welcome',
-      text: 'Welcome to Antigravity Wealth! Your secure offline-first environment is ready. Click on any tab to start logging your assets.',
+      text: 'Welcome to ArthSetu! Your secure offline-first environment is ready. Click on any tab to start logging your assets.',
       type: 'info',
       date: new Date().toISOString().split('T')[0],
       read: false,
@@ -41,6 +44,19 @@ const DEFAULT_MOCK_DATA: PortfolioData = {
  * Initialize storage with default mock data if empty
  */
 export function initializeStorage(): void {
+  // Migrate from old keys if present
+  const oldData = localStorage.getItem(OLD_STORAGE_KEY);
+  const oldAuth = localStorage.getItem(OLD_AUTH_KEY);
+
+  if (oldData && !localStorage.getItem(STORAGE_KEY)) {
+    localStorage.setItem(STORAGE_KEY, oldData);
+    localStorage.removeItem(OLD_STORAGE_KEY);
+  }
+  if (oldAuth && !localStorage.getItem(AUTH_KEY)) {
+    localStorage.setItem(AUTH_KEY, oldAuth);
+    localStorage.removeItem(OLD_AUTH_KEY);
+  }
+
   if (!localStorage.getItem(STORAGE_KEY)) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_MOCK_DATA));
   }

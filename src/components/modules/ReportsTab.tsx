@@ -141,7 +141,7 @@ export const ReportsTab: React.FC = () => {
           </button>
           <a
             href={`data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(data, null, 2))}`}
-            download="antigravity_wealth_backup.json"
+            download="arthsetu_wealth_backup.json"
             className="bg-violet-650 hover:bg-violet-550 text-white text-xs font-bold py-2 px-3.5 rounded-lg flex items-center gap-1.5 transition-all shadow-md"
           >
             <Download className="w-4 h-4" /> Export JSON
@@ -156,7 +156,7 @@ export const ReportsTab: React.FC = () => {
         <div className="flex justify-between items-start pb-6 border-b border-slate-800">
           <div>
             <h1 className="text-xl font-black text-white uppercase tracking-wider bg-gradient-to-r from-violet-400 to-indigo-300 bg-clip-text text-transparent">
-              Antigravity Capital
+              ArthSetu Capital
             </h1>
             <p className="text-[10px] text-slate-400 font-mono uppercase mt-1">PRIVATE FINANCIAL HEALTH DISCLOSURE</p>
           </div>
@@ -317,7 +317,7 @@ export const ReportsTab: React.FC = () => {
             <span>Audit parameters compiled in compliance with local-first, zero-telemetry architectures.</span>
           </div>
           <div className="text-right text-[10px] text-slate-500 font-mono uppercase tracking-wide">
-            ✦ ANTIGRAVITY PRIVATE SYSTEM ✦
+            ✦ ARTHSETU PRIVATE SYSTEM ✦
           </div>
         </div>
       </div>

@@ -97,7 +97,7 @@ const AppContent: React.FC = () => {
       {/* MOBILE HEADER */}
       <div className="md:hidden flex items-center justify-between p-4 bg-slate-900 border-b border-slate-800 sticky top-0 z-30">
         <h1 className="text-sm font-black tracking-wider text-white uppercase bg-gradient-to-r from-violet-400 to-indigo-300 bg-clip-text text-transparent">
-          Antigravity Wealth
+          ArthSetu Wealth
         </h1>
         <div className="flex items-center gap-3">
           <button onClick={() => setIsNotifOpen(!isNotifOpen)} className="relative p-1 text-slate-400">
@@ -122,7 +122,7 @@ const AppContent: React.FC = () => {
         {/* Brand Banner */}
         <div className="p-6 pb-2">
           <h1 className="text-base font-black tracking-tight text-white uppercase bg-gradient-to-r from-violet-400 to-indigo-300 bg-clip-text text-transparent flex items-center gap-2">
-            <span>Antigravity</span> 
+            <span>ArthSetu</span> 
             <span className="text-[9px] border border-violet-500/30 text-violet-400 px-1.5 py-0.5 rounded font-mono font-normal tracking-wide uppercase">
               v1.0
             </span>
