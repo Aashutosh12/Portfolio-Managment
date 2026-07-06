@@ -91,13 +91,29 @@ export const StocksTab: React.FC = () => {
         // Fallback to allorigins if corsproxy fails
         if (!success) {
           try {
-            const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(queryUrl)}`);
+            const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(queryUrl)}`);
+            if (res.ok) {
+              const wrapper = await res.json();
+              if (wrapper && wrapper.contents) {
+                responseData = JSON.parse(wrapper.contents);
+                success = true;
+              }
+            }
+          } catch (err) {
+            console.warn('allorigins fallback failed, trying codetabs', err);
+          }
+        }
+
+        // Fallback to codetabs if both fail
+        if (!success) {
+          try {
+            const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(queryUrl)}`);
             if (res.ok) {
               responseData = await res.json();
               success = true;
             }
           } catch (err) {
-            console.warn('allorigins fallback failed', err);
+            console.warn('codetabs fallback failed', err);
           }
         }
 
