@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePortfolio } from '../../context/PortfolioContext';
 import type { StockAsset } from '../../types';
 import { formatCurrency, formatPercent } from '../../utils/formatters';
@@ -60,6 +60,57 @@ export const StocksTab: React.FC = () => {
         s.name.toLowerCase().includes(ticker.toLowerCase())
       ).slice(0, 5)
     : [];
+
+  const [stockSearchQuery, setStockSearchQuery] = useState('');
+  const [yahooSuggestions, setYahooSuggestions] = useState<{ symbol: string; shortname?: string; longname?: string; exchDisp?: string; sector?: string }[]>([]);
+  const [isSearchingYahoo, setIsSearchingYahoo] = useState(false);
+
+  useEffect(() => {
+    if (stockSearchQuery.trim().length < 2) {
+      setYahooSuggestions([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setIsSearchingYahoo(true);
+      try {
+        const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(stockSearchQuery)}`;
+        const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
+        if (res.ok) {
+          const resultData = await res.json();
+          const quotes = resultData?.quotes || [];
+          const equities = quotes.filter((q: any) => q.quoteType === 'EQUITY' || q.quoteType === 'ETF');
+          setYahooSuggestions(equities.slice(0, 8));
+        }
+      } catch (e) {
+        console.error('Yahoo stock search error:', e);
+      } finally {
+        setIsSearchingYahoo(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [stockSearchQuery]);
+
+  const handleSelectYahooSuggestion = (suggestion: any) => {
+    setCompany(suggestion.longname || suggestion.shortname || suggestion.symbol);
+    setTicker(suggestion.symbol);
+    
+    // Set exchange
+    const exch = suggestion.exchDisp || '';
+    if (['NSE', 'BSE', 'NASDAQ', 'NYSE'].includes(exch.toUpperCase())) {
+      setExchange(exch.toUpperCase());
+    } else if (suggestion.symbol.endsWith('.NS')) {
+      setExchange('NSE');
+    } else if (suggestion.symbol.endsWith('.BO')) {
+      setExchange('BSE');
+    } else {
+      setExchange('NSE');
+    }
+
+    setSector(suggestion.sector || 'Other');
+    setYahooSuggestions([]);
+    setStockSearchQuery('');
+  };
 
   // CSV Import State
   const [csvText, setCsvText] = useState('');
@@ -181,6 +232,8 @@ export const StocksTab: React.FC = () => {
     setSector('');
     setNotes('');
     setSelectedStock(null);
+    setStockSearchQuery('');
+    setYahooSuggestions([]);
   };
 
   // CSV Import Parse Logic
@@ -554,6 +607,47 @@ export const StocksTab: React.FC = () => {
               <button onClick={() => setIsAddOpen(false)} className="text-slate-500 hover:text-white">
                 <X className="w-4 h-4" />
               </button>
+            </div>
+
+            {/* Live Search Input (Yahoo Finance API) */}
+            <div className="space-y-1 relative">
+              <label className="text-slate-400 text-xs">Search Stock Ticker / Company (Live Yahoo Finance)</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
+                <input
+                  type="text"
+                  placeholder="Search Sterlite, Tata, Google, Apple..."
+                  value={stockSearchQuery}
+                  onChange={(e) => setStockSearchQuery(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg py-2 pl-9 pr-4 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-violet-500"
+                />
+              </div>
+
+              {isSearchingYahoo && (
+                <div className="text-[10px] text-slate-500 mt-1 italic animate-pulse">Searching Yahoo Finance...</div>
+              )}
+
+              {yahooSuggestions.length > 0 && (
+                <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-slate-950 border border-slate-800 rounded-lg shadow-2xl overflow-hidden max-h-56 overflow-y-auto">
+                  {yahooSuggestions.map((suggestion) => (
+                    <button
+                      key={suggestion.symbol}
+                      type="button"
+                      onClick={() => handleSelectYahooSuggestion(suggestion)}
+                      className="w-full text-left px-3 py-2.5 hover:bg-slate-900 text-xs border-b border-slate-900/60 last:border-0 transition-colors flex justify-between items-center"
+                    >
+                      <div>
+                        <span className="font-bold text-slate-200 block truncate w-48">{suggestion.longname || suggestion.shortname}</span>
+                        <span className="text-[10px] text-slate-455 block truncate w-48">{suggestion.sector || 'Equity'}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="font-mono bg-slate-800 text-violet-300 px-1.5 py-0.5 rounded text-[10px] font-semibold">{suggestion.symbol}</span>
+                        <span className="block text-[9px] text-slate-500 font-bold uppercase mt-0.5">{suggestion.exchDisp}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <form onSubmit={handleAddSubmit} className="grid grid-cols-2 gap-4 text-xs">
